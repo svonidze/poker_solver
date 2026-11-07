@@ -20,6 +20,7 @@
 #include "trainer.h"
 
 namespace {
+double time_limit = 0.0;
 struct Options {
     std::string config_path;
     std::string algo = "cfr+";
@@ -396,7 +397,16 @@ void run_algo(const std::string &label,
         return target_active && exp <= target_exp;
     };
 
-    if (target_active && checkpoints.empty()) {
+    int completed_iterations = iters;
+    if (time_limit > 0.0) {
+        completed_iterations = 0;
+        while (completed_iterations < iters &&
+               std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count() < time_limit) {
+            trainer.run(1);
+            ++completed_iterations;
+        }
+        if (eval) record_eval(completed_iterations);
+    } else if (target_active && checkpoints.empty()) {
         std::int64_t completed = 0;
         std::int64_t target = 5;
         while (true) {
@@ -434,6 +444,7 @@ void run_algo(const std::string &label,
             record_eval(iters);
         }
     }
+    std::cout << "completed_iterations: " << completed_iterations << "\n";
     auto end = std::chrono::steady_clock::now();
     std::chrono::duration<double> elapsed = end - start;
     double pot_base = game.base_pot > 0 ? static_cast<double>(game.base_pot) : 1.0;
@@ -591,6 +602,8 @@ int main(int argc, char **argv) {
             }
         } else if (arg == "--iters" && i + 1 < argc) {
             opts.iters = std::stoll(argv[++i]);
+        } else if (arg == "--time-limit" && i + 1 < argc) {
+            time_limit = std::stod(argv[++i]);
         } else if (arg == "--stack" && i + 1 < argc) {
             opts.stack = std::stoi(argv[++i]);
             opts.stack_set = true;
